@@ -77,56 +77,47 @@ const QUESTION_DATA = [
         difficulty: 'Easy',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1GTM0LOwpjNUiphl3_HbBmGl-dRoIXjuB=w1287-h935-iv1?auditContext=prefetch',
+        question: '/images/mohamed-salah.png',
         answer: 'Mohamed Salah',
         difficulty: 'Easy',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1HbLT-WNC10mgVb6qx8UYKOBwnSBTVrSR=w1287-h935-iv2?auditContext=prefetch',
+        question: '/images/paul-pogba.png',
         answer: 'Paul Pogba',
         difficulty: 'Medium',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1XhL_gul72vnMUOF5WC-dn-SM4A2inttJ=w1287-h935-iv1?auditContext=prefetch',
+        question: '/images/luka-modric.png',
         answer: 'Luka Modric',
         difficulty: 'Medium',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1XshyWMkeIkThPDc4y-0hwHMo1IDXvcOo=w1287-h935-iv1?auditContext=prefetch',
+        question: '/images/lukaku.png',
         answer: 'Romelu Lukaku',
         difficulty: 'Difficult',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1tasA1Z-jkcSzYBYZZ4nLG4NBS5kv_ohH=w1287-h935-iv1?auditContext=prefetch',
+        question: '/images/joao-felix.png',
         answer: 'Joao Felix',
         difficulty: 'Medium',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1MbdhVEIQtxkyw14B2WKbSiselmTMnuQb=w1287-h935-iv1?auditContext=prefetch',
+        question: '/images/david-beckham.png',
         answer: 'David Beckham',
         difficulty: 'Medium',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/19LfCzhDm5T5hf2yvlIriOIFH9TxfBSnV=w1287-h935-iv2?auditContext=prefetch',
+        question: '/images/raphinha.png',
         answer: 'Raphinha',
         difficulty: 'Medium',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/1S0TjOkgm3hn6sNTKHIiRAf1P_8p2cy21=w1287-h935-iv2?auditContext=prefetch',
+        question: '/images/david-luiz.png',
         answer: 'David Luiz',
         difficulty: 'Difficult',
       },
       {
-        question:
-          'https://lh3.google.com/u/2/d/15SgN0tDXDCKenrf8vHUw8uFybA50vis9=w1287-h935-iv2?auditContext=prefetch',
+        question: '/images/harry-kewell.png',
         answer: 'Harry Kewell',
         difficulty: 'Difficult',
       },
@@ -293,11 +284,42 @@ const QUESTION_DATA = [
   })),
 }));
 
-const urlPattern = /^https?:\/\//i;
+const imagePromptPattern = /^(https?:\/\/|\/images\/)/i;
 const STORAGE_KEY = 'football-trivia-game-state';
+const DEFAULT_TEAM_NAME = 'Team';
+const DEFAULT_GAME_STATE = {
+  usedIds: [],
+  activeQuestion: null,
+  answerVisible: false,
+  teams: [],
+  gameStarted: false,
+  currentTeamIndex: 0,
+  activeTeamId: null,
+  showLeaderboard: false,
+  scoreHistory: [],
+};
 
 function isImagePrompt(text) {
-  return urlPattern.test(text.trim());
+  return imagePromptPattern.test(text.trim());
+}
+
+function getImageSources(url) {
+  const trimmedUrl = url.trim();
+  const googleFileId = trimmedUrl.match(/\/d\/([^=/?#]+)/)?.[1];
+
+  if (!googleFileId) {
+    return [trimmedUrl];
+  }
+
+  const googleusercontentUrl = trimmedUrl.replace('https://lh3.google.com', 'https://lh3.googleusercontent.com');
+
+  return [
+    googleusercontentUrl,
+    `https://lh3.googleusercontent.com/d/${googleFileId}=w1600`,
+    `https://drive.google.com/uc?export=view&id=${googleFileId}`,
+    `https://drive.google.com/thumbnail?id=${googleFileId}&sz=w1600`,
+    trimmedUrl,
+  ];
 }
 
 function findQuestionById(questionId) {
@@ -320,13 +342,13 @@ function findQuestionById(questionId) {
 function loadStoredGameState() {
   try {
     if (typeof window === 'undefined') {
-      return { usedIds: [], activeQuestion: null, answerVisible: false };
+      return DEFAULT_GAME_STATE;
     }
 
     const rawState = window.localStorage.getItem(STORAGE_KEY);
 
     if (!rawState) {
-      return { usedIds: [], activeQuestion: null, answerVisible: false };
+      return DEFAULT_GAME_STATE;
     }
 
     const parsedState = JSON.parse(rawState);
@@ -338,9 +360,15 @@ function loadStoredGameState() {
       usedIds: Array.isArray(parsedState.usedIds) ? parsedState.usedIds : [],
       activeQuestion,
       answerVisible: Boolean(parsedState.answerVisible && activeQuestion),
+      teams: Array.isArray(parsedState.teams) ? parsedState.teams : [],
+      gameStarted: Boolean(parsedState.gameStarted),
+      currentTeamIndex: Number.isInteger(parsedState.currentTeamIndex) ? parsedState.currentTeamIndex : 0,
+      activeTeamId: parsedState.activeTeamId ?? null,
+      showLeaderboard: Boolean(parsedState.showLeaderboard),
+      scoreHistory: Array.isArray(parsedState.scoreHistory) ? parsedState.scoreHistory : [],
     };
   } catch {
-    return { usedIds: [], activeQuestion: null, answerVisible: false };
+    return DEFAULT_GAME_STATE;
   }
 }
 
@@ -349,12 +377,27 @@ function App() {
   const [usedIds, setUsedIds] = useState(storedGameState.usedIds);
   const [activeQuestion, setActiveQuestion] = useState(storedGameState.activeQuestion);
   const [answerVisible, setAnswerVisible] = useState(storedGameState.answerVisible);
+  const [teams, setTeams] = useState(storedGameState.teams);
+  const [gameStarted, setGameStarted] = useState(storedGameState.gameStarted);
+  const [currentTeamIndex, setCurrentTeamIndex] = useState(storedGameState.currentTeamIndex);
+  const [activeTeamId, setActiveTeamId] = useState(storedGameState.activeTeamId);
+  const [showLeaderboard, setShowLeaderboard] = useState(storedGameState.showLeaderboard);
+  const [scoreHistory, setScoreHistory] = useState(storedGameState.scoreHistory);
+  const [showSequenceModal, setShowSequenceModal] = useState(false);
+  const [celebration, setCelebration] = useState(null);
 
   const totalQuestions = useMemo(
     () => QUESTION_DATA.reduce((sum, category) => sum + category.questions.length, 0),
     [],
   );
   const completedCount = usedIds.length;
+  const normalizedCurrentTeamIndex = teams.length ? currentTeamIndex % teams.length : 0;
+  const currentTeam = teams[normalizedCurrentTeamIndex] ?? null;
+  const activeTeam = teams.find((team) => team.id === activeTeamId) ?? currentTeam;
+  const sortedTeams = useMemo(
+    () => [...teams].sort((first, second) => second.score - first.score),
+    [teams],
+  );
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -363,9 +406,40 @@ function App() {
         usedIds,
         activeQuestionId: activeQuestion?.id ?? null,
         answerVisible,
+        teams,
+        gameStarted,
+        currentTeamIndex: normalizedCurrentTeamIndex,
+        activeTeamId,
+        showLeaderboard,
+        scoreHistory,
       }),
     );
-  }, [activeQuestion, answerVisible, usedIds]);
+  }, [
+    activeQuestion,
+    activeTeamId,
+    answerVisible,
+    gameStarted,
+    normalizedCurrentTeamIndex,
+    scoreHistory,
+    showLeaderboard,
+    teams,
+    usedIds,
+  ]);
+
+  useEffect(() => {
+    if (!celebration) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => setCelebration(null), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [celebration]);
+
+  useEffect(() => {
+    if (teams.length && currentTeamIndex >= teams.length) {
+      setCurrentTeamIndex(0);
+    }
+  }, [currentTeamIndex, teams.length]);
 
   const pickQuestion = (category, difficulty) => {
     const nextQuestion = category.questions.find(
@@ -382,6 +456,7 @@ function App() {
       accent: category.accent,
       points: POINT_TIERS[difficulty],
     });
+    setActiveTeamId(currentTeam?.id ?? teams[0]?.id ?? null);
     setAnswerVisible(false);
   };
 
@@ -399,6 +474,7 @@ function App() {
   const closeQuestion = () => {
     setActiveQuestion(null);
     setAnswerVisible(false);
+    setActiveTeamId(currentTeam?.id ?? null);
   };
 
   const resetBoard = () => {
@@ -406,14 +482,175 @@ function App() {
     setUsedIds([]);
     setActiveQuestion(null);
     setAnswerVisible(false);
+    setTeams([]);
+    setGameStarted(false);
+    setCurrentTeamIndex(0);
+    setActiveTeamId(null);
+    setShowLeaderboard(false);
+    setScoreHistory([]);
+    setShowSequenceModal(false);
+    setCelebration(null);
   };
+
+  const addTeam = (teamName) => {
+    const cleanName = teamName.trim();
+
+    if (!cleanName) {
+      return;
+    }
+
+    setTeams((currentTeams) => [
+      ...currentTeams,
+      {
+        id: `${Date.now()}-${cleanName}`,
+        name: cleanName,
+        score: 0,
+      },
+    ]);
+  };
+
+  const removeTeam = (teamId) => {
+    setTeams((currentTeams) => currentTeams.filter((team) => team.id !== teamId));
+  };
+
+  const moveTeam = (teamId, direction) => {
+    setTeams((currentTeams) => {
+      const currentIndex = currentTeams.findIndex((team) => team.id === teamId);
+      const nextIndex = currentIndex + direction;
+      const preservedTeamId = currentTeam?.id ?? currentTeams[normalizedCurrentTeamIndex]?.id;
+
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentTeams.length) {
+        return currentTeams;
+      }
+
+      const nextTeams = [...currentTeams];
+      const [team] = nextTeams.splice(currentIndex, 1);
+      nextTeams.splice(nextIndex, 0, team);
+
+      const preservedTeamIndex = nextTeams.findIndex((nextTeam) => nextTeam.id === preservedTeamId);
+
+      if (preservedTeamIndex >= 0) {
+        setCurrentTeamIndex(preservedTeamIndex);
+      }
+
+      return nextTeams;
+    });
+  };
+
+  const reverseTeamOrder = () => {
+    setTeams((currentTeams) => [...currentTeams].reverse());
+    setCurrentTeamIndex(0);
+  };
+
+  const rotateTeamToFirst = (teamId) => {
+    setTeams((currentTeams) => {
+      const teamIndex = currentTeams.findIndex((team) => team.id === teamId);
+
+      if (teamIndex <= 0) {
+        return currentTeams;
+      }
+
+      return [...currentTeams.slice(teamIndex), ...currentTeams.slice(0, teamIndex)];
+    });
+    setCurrentTeamIndex(0);
+  };
+
+  const startGame = () => {
+    if (!teams.length) {
+      addTeam(`${DEFAULT_TEAM_NAME} 1`);
+      return;
+    }
+
+    setGameStarted(true);
+    setCurrentTeamIndex(0);
+    setActiveTeamId(teams[0]?.id ?? null);
+  };
+
+  const updateActiveTeam = (teamId) => {
+    setActiveTeamId(teamId);
+  };
+
+  const applyScore = (teamId, points, wasCorrect) => {
+    const scoringTeam = teams.find((team) => team.id === teamId);
+
+    if (!scoringTeam || !activeQuestion) {
+      return;
+    }
+
+    setTeams((currentTeams) =>
+      currentTeams.map((team) =>
+        team.id === teamId ? { ...team, score: team.score + points } : team,
+      ),
+    );
+
+    if (wasCorrect) {
+      setCelebration({ teamName: scoringTeam.name, points, tone: 'goal' });
+    } else {
+      setCelebration({ teamName: scoringTeam.name, points, tone: 'miss' });
+    }
+
+    setScoreHistory((currentHistory) => [
+      ...currentHistory,
+      {
+        id: `${Date.now()}-${scoringTeam.id}`,
+        teamId,
+        teamName: scoringTeam.name,
+        points,
+        question: activeQuestion.question,
+        category: activeQuestion.category,
+        difficulty: activeQuestion.difficulty,
+      },
+    ]);
+
+    setCurrentTeamIndex((currentIndex) => (teams.length ? (currentIndex + 1) % teams.length : 0));
+    closeQuestion();
+  };
+
+  if (!gameStarted) {
+    return (
+      <main className="app-shell setup-shell">
+        <TournamentSetup
+          onAddTeam={addTeam}
+          onMoveTeam={moveTeam}
+          onRemoveTeam={removeTeam}
+          onStartGame={startGame}
+          teams={teams}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">
+      {celebration && (
+        <Celebration
+          points={celebration.points}
+          teamName={celebration.teamName}
+          tone={celebration.tone}
+        />
+      )}
       <section className="scoreboard">
         <div>
           <p className="eyebrow">Matchday trivia board</p>
           <h1>Football Trivia</h1>
+        </div>
+        <div className="turn-card">
+          <span>Now playing</span>
+          <strong>{currentTeam?.name ?? 'No team'}</strong>
+          <select
+            aria-label="Select current team"
+            onChange={(event) => setCurrentTeamIndex(Number(event.target.value))}
+            value={normalizedCurrentTeamIndex}
+          >
+            {teams.map((team, index) => (
+              <option key={team.id} value={index}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+          <button className="sequence-button" onClick={() => setShowSequenceModal(true)} type="button">
+            Adjust sequence
+          </button>
         </div>
         <div className="progress-card" aria-label={`${completedCount} of ${totalQuestions} questions played`}>
           <span className="progress-number">{completedCount}</span>
@@ -422,8 +659,11 @@ function App() {
             <span style={{ width: `${(completedCount / totalQuestions) * 100}%` }} />
           </div>
         </div>
+        <button className="leaderboard-button" onClick={() => setShowLeaderboard(true)} type="button">
+          Reveal leaderboard
+        </button>
         <button className="reset-button" onClick={resetBoard} type="button">
-          Reset board
+          Reset tournament
         </button>
       </section>
 
@@ -441,12 +681,100 @@ function App() {
       {activeQuestion && (
         <QuestionModal
           answerVisible={answerVisible}
+          activeTeamId={activeTeam?.id ?? ''}
           onClose={closeQuestion}
+          onScore={applyScore}
           onReveal={revealAnswer}
+          onSelectTeam={updateActiveTeam}
           question={activeQuestion}
+          teams={teams}
+        />
+      )}
+
+      {showLeaderboard && (
+        <LeaderboardModal
+          onClose={() => setShowLeaderboard(false)}
+          scoreHistory={scoreHistory}
+          teams={sortedTeams}
+        />
+      )}
+
+      {showSequenceModal && (
+        <TeamSequenceModal
+          currentTeamId={currentTeam?.id ?? ''}
+          onClose={() => setShowSequenceModal(false)}
+          onMoveTeam={moveTeam}
+          onReverseOrder={reverseTeamOrder}
+          onRotateTeamToFirst={rotateTeamToFirst}
+          onSetCurrentTeam={(teamId) => {
+            const nextIndex = teams.findIndex((team) => team.id === teamId);
+
+            if (nextIndex >= 0) {
+              setCurrentTeamIndex(nextIndex);
+            }
+          }}
+          teams={teams}
         />
       )}
     </main>
+  );
+}
+
+function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, teams }) {
+  const [teamName, setTeamName] = useState('');
+
+  const submitTeam = (event) => {
+    event.preventDefault();
+    onAddTeam(teamName);
+    setTeamName('');
+  };
+
+  return (
+    <section className="setup-panel">
+      <p className="eyebrow">Tournament setup</p>
+      <h1>Football Trivia</h1>
+      <form className="team-form" onSubmit={submitTeam}>
+        <input
+          aria-label="Team name"
+          onChange={(event) => setTeamName(event.target.value)}
+          placeholder="Add team name"
+          value={teamName}
+        />
+        <button className="primary-action" type="submit">
+          Add team
+        </button>
+      </form>
+
+      <div className="team-order-list">
+        {teams.length ? (
+          teams.map((team, index) => (
+            <article className="team-order-item" key={team.id}>
+              <span>{index + 1}</span>
+              <strong>{team.name}</strong>
+              <button onClick={() => onMoveTeam(team.id, -1)} type="button" disabled={index === 0}>
+                Up
+              </button>
+              <button
+                onClick={() => onMoveTeam(team.id, 1)}
+                type="button"
+                disabled={index === teams.length - 1}
+              >
+                Down
+              </button>
+              <button onClick={() => onRemoveTeam(team.id)} type="button">
+                Remove
+              </button>
+            </article>
+          ))
+        ) : (
+          <div className="empty-teams">Add teams to set the play order.</div>
+        )}
+      </div>
+
+      <button className="start-game-button" disabled={!teams.length} onClick={onStartGame} type="button">
+        Start game
+      </button>
+    </section>
   );
 }
 
@@ -487,8 +815,37 @@ function CategoryColumn({ category, onPick, usedIds }) {
   );
 }
 
-function QuestionModal({ answerVisible, onClose, onReveal, question }) {
+function QuestionModal({
+  activeTeamId,
+  answerVisible,
+  onClose,
+  onReveal,
+  onScore,
+  onSelectTeam,
+  question,
+  teams,
+}) {
+  const [customPoints, setCustomPoints] = useState(question.points.reward);
+  const defaultPassedTeamId =
+    teams.find((team) => team.id !== activeTeamId)?.id ?? activeTeamId ?? teams[0]?.id ?? '';
+  const [passedTeamId, setPassedTeamId] = useState(defaultPassedTeamId);
   const isImage = isImagePrompt(question.question);
+
+  useEffect(() => {
+    setCustomPoints(question.points.reward);
+  }, [question.id, question.points.reward]);
+
+  useEffect(() => {
+    setPassedTeamId((currentTeamId) => {
+      const currentTeamStillExists = teams.some((team) => team.id === currentTeamId);
+
+      if (currentTeamStillExists && currentTeamId !== activeTeamId) {
+        return currentTeamId;
+      }
+
+      return defaultPassedTeamId;
+    });
+  }, [activeTeamId, defaultPassedTeamId, teams]);
 
   return (
     <section className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Trivia question">
@@ -498,6 +855,17 @@ function QuestionModal({ answerVisible, onClose, onReveal, question }) {
           <span>{question.difficulty}</span>
           <span>{question.points.label}</span>
         </div>
+
+        <label className="modal-team-select">
+          <span>Playing team</span>
+          <select onChange={(event) => onSelectTeam(event.target.value)} value={activeTeamId}>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name} ({team.score})
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className="question-body">
           {isImage ? (
@@ -520,9 +888,64 @@ function QuestionModal({ answerVisible, onClose, onReveal, question }) {
               Reveal answer
             </button>
           ) : (
-            <button className="primary-action" onClick={onClose} type="button">
-              Back to board
-            </button>
+            <div className="score-decision">
+              <p>Was the answer correct?</p>
+              <div className="score-buttons">
+                <button
+                  className="correct-action"
+                  onClick={() => onScore(activeTeamId, question.points.reward, true)}
+                  type="button"
+                >
+                  Yes +{question.points.reward}
+                </button>
+                <button
+                  className="wrong-action"
+                  onClick={() => onScore(activeTeamId, -question.points.penalty, false)}
+                  type="button"
+                >
+                  No -{question.points.penalty}
+                </button>
+              </div>
+              <div className="custom-score">
+                <input
+                  aria-label="Custom points"
+                  onChange={(event) => setCustomPoints(Number(event.target.value))}
+                  type="number"
+                  value={customPoints}
+                />
+                <button
+                  className="secondary-action"
+                  onClick={() => onScore(activeTeamId, customPoints, customPoints > 0)}
+                  type="button"
+                >
+                  Apply custom
+                </button>
+              </div>
+              <div className="pass-score">
+                <label>
+                  <span>Passed to team</span>
+                  <select
+                    aria-label="Passed to team"
+                    onChange={(event) => setPassedTeamId(event.target.value)}
+                    value={passedTeamId}
+                  >
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name} ({team.score})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="secondary-action"
+                  disabled={!passedTeamId}
+                  onClick={() => onScore(passedTeamId, customPoints, customPoints > 0)}
+                  type="button"
+                >
+                  Give custom to passed team
+                </button>
+              </div>
+            </div>
           )}
           <button className="secondary-action" onClick={onClose} type="button">
             Close
@@ -533,20 +956,166 @@ function QuestionModal({ answerVisible, onClose, onReveal, question }) {
   );
 }
 
+function LeaderboardModal({ onClose, scoreHistory, teams }) {
+  return (
+    <section className="modal-backdrop leaderboard-backdrop" role="dialog" aria-modal="true" aria-label="Leaderboard">
+      <article className="leaderboard-modal">
+        <p className="eyebrow">Live standings</p>
+        <h2>Leaderboard</h2>
+        <div className="leaderboard-list">
+          {teams.map((team, index) => {
+            const teamHistory = scoreHistory.filter((entry) => entry.teamId === team.id);
+
+            return (
+              <div className="leaderboard-row" key={team.id}>
+                <span className="rank">{index + 1}</span>
+                <div className="leaderboard-team">
+                  <strong>{team.name}</strong>
+                  <div className="leaderboard-points-history">
+                    {teamHistory.length ? (
+                      teamHistory.map((entry, historyIndex) => (
+                        <span
+                          className={entry.points >= 0 ? 'positive' : 'negative'}
+                          key={entry.id}
+                          title={`${entry.category} - ${entry.difficulty}`}
+                        >
+                          {historyIndex + 1}. {entry.points > 0 ? '+' : ''}
+                          {entry.points}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="empty">No points yet</span>
+                    )}
+                  </div>
+                </div>
+                <span>{team.score}</span>
+              </div>
+            );
+          })}
+        </div>
+        <button className="primary-action" onClick={onClose} type="button">
+          Back to game
+        </button>
+      </article>
+    </section>
+  );
+}
+
+function TeamSequenceModal({
+  currentTeamId,
+  onClose,
+  onMoveTeam,
+  onReverseOrder,
+  onRotateTeamToFirst,
+  onSetCurrentTeam,
+  teams,
+}) {
+  const lastTeam = teams[teams.length - 1];
+
+  return (
+    <section className="modal-backdrop sequence-backdrop" role="dialog" aria-modal="true" aria-label="Team sequence">
+      <article className="sequence-modal">
+        <p className="eyebrow">Turn order</p>
+        <h2>Team Sequence</h2>
+
+        <div className="sequence-quicklinks" aria-label="Quick sequence changes">
+          <button disabled={teams.length < 2} onClick={onReverseOrder} type="button">
+            Last team first
+          </button>
+          <button disabled={!currentTeamId} onClick={() => onRotateTeamToFirst(currentTeamId)} type="button">
+            Current team first
+          </button>
+          <button disabled={!lastTeam} onClick={() => onSetCurrentTeam(lastTeam.id)} type="button">
+            Make last current
+          </button>
+        </div>
+
+        <div className="sequence-list">
+          {teams.map((team, index) => {
+            const isCurrent = team.id === currentTeamId;
+
+            return (
+              <article className={`sequence-row ${isCurrent ? 'current' : ''}`} key={team.id}>
+                <span className="rank">{index + 1}</span>
+                <div>
+                  <strong>{team.name}</strong>
+                  <span>{isCurrent ? 'Now playing' : `${team.score} points`}</span>
+                </div>
+                <button
+                  disabled={index === 0}
+                  onClick={() => onMoveTeam(team.id, -1)}
+                  type="button"
+                >
+                  Up
+                </button>
+                <button
+                  disabled={index === teams.length - 1}
+                  onClick={() => onMoveTeam(team.id, 1)}
+                  type="button"
+                >
+                  Down
+                </button>
+                <button onClick={() => onRotateTeamToFirst(team.id)} type="button">
+                  First
+                </button>
+              </article>
+            );
+          })}
+        </div>
+
+        <button className="primary-action" onClick={onClose} type="button">
+          Back to game
+        </button>
+      </article>
+    </section>
+  );
+}
+
+function Celebration({ teamName, points, tone }) {
+  const isMiss = tone === 'miss';
+
+  return (
+    <div className={`celebration ${isMiss ? 'miss' : 'goal'}`} aria-live="polite">
+      <div className="celebration-burst">
+        {Array.from({ length: 18 }).map((_, index) => (
+          <span key={index} style={{ '--i': index }} />
+        ))}
+      </div>
+      <strong>{isMiss ? 'MISS!' : 'GOAL!'}</strong>
+      <p>
+        {teamName} {points > 0 ? '+' : ''}
+        {points}
+      </p>
+    </div>
+  );
+}
+
 function ImageClue({ question }) {
   const [imageErrored, setImageErrored] = useState(false);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const imageSources = getImageSources(question.question);
+  const imageSource = imageSources[sourceIndex] ?? question.question;
 
   useEffect(() => {
     setImageErrored(false);
+    setSourceIndex(0);
   }, [question.id]);
+
+  const handleImageError = () => {
+    if (sourceIndex < imageSources.length - 1) {
+      setSourceIndex((currentIndex) => currentIndex + 1);
+      return;
+    }
+
+    setImageErrored(true);
+  };
 
   return (
     <figure className={`image-question ${imageErrored ? 'image-question-error' : ''}`}>
       <img
-        src={question.question}
+        src={imageSource}
         alt={`${question.category} question clue`}
-        onError={() => setImageErrored(true)}
-        referrerPolicy="no-referrer"
+        onError={handleImageError}
       />
       <figcaption>
         {imageErrored ? (

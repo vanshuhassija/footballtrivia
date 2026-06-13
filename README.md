@@ -16,3 +16,7 @@ The board has four categories. Each category has three point tiers:
 - Easy: `+5 / -5`
 
 Pick a category and point tier to show a question. After revealing the answer, that question is marked as played and removed from the remaining count.
+
+## Image clues
+
+Career Path image clues are stored locally in `public/images` and rendered with paths like `/images/lukaku.png`. Add future image clues there as local files for the most reliable projector setup.
