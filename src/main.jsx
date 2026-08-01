@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { HARRY_POTTER_QUESTION_DATA } from './questions';
 
 const POINT_TIERS = {
-  Difficult: { reward: 20, penalty: 15, label: '+20 / -15', tone: 'hard' },
+  Hard: { reward: 20, penalty: 15, label: '+20 / -15', tone: 'hard' },
   Medium: { reward: 10, penalty: 10, label: '+10 / -10', tone: 'mid' },
   Easy: { reward: 5, penalty: 5, label: '+5 / -5', tone: 'easy' },
 };
 
-const QUESTION_DATA = [
+const LEGACY_QUESTION_DATA = [
   {
     category: 'Football Rules',
     short: 'Rules',
@@ -284,9 +285,12 @@ const QUESTION_DATA = [
   })),
 }));
 
+const QUESTION_DATA = HARRY_POTTER_QUESTION_DATA;
+
 const imagePromptPattern = /^(https?:\/\/|\/images\/)/i;
-const STORAGE_KEY = 'football-trivia-game-state';
+const STORAGE_KEY = 'harry-potter-trivia-game-state';
 const DEFAULT_TEAM_NAME = 'Team';
+const DEFAULT_PASSED_POINTS = { Easy: 2, Medium: 5, Hard: 10 };
 const DEFAULT_GAME_STATE = {
   usedIds: [],
   activeQuestion: null,
@@ -297,6 +301,7 @@ const DEFAULT_GAME_STATE = {
   activeTeamId: null,
   showLeaderboard: false,
   scoreHistory: [],
+  passedPoints: DEFAULT_PASSED_POINTS,
 };
 
 function isImagePrompt(text) {
@@ -366,6 +371,11 @@ function loadStoredGameState() {
       activeTeamId: parsedState.activeTeamId ?? null,
       showLeaderboard: Boolean(parsedState.showLeaderboard),
       scoreHistory: Array.isArray(parsedState.scoreHistory) ? parsedState.scoreHistory : [],
+      passedPoints: {
+        Easy: Number.isFinite(parsedState.passedPoints?.Easy) ? parsedState.passedPoints.Easy : DEFAULT_PASSED_POINTS.Easy,
+        Medium: Number.isFinite(parsedState.passedPoints?.Medium) ? parsedState.passedPoints.Medium : DEFAULT_PASSED_POINTS.Medium,
+        Hard: Number.isFinite(parsedState.passedPoints?.Hard) ? parsedState.passedPoints.Hard : DEFAULT_PASSED_POINTS.Hard,
+      },
     };
   } catch {
     return DEFAULT_GAME_STATE;
@@ -383,6 +393,7 @@ function App() {
   const [activeTeamId, setActiveTeamId] = useState(storedGameState.activeTeamId);
   const [showLeaderboard, setShowLeaderboard] = useState(storedGameState.showLeaderboard);
   const [scoreHistory, setScoreHistory] = useState(storedGameState.scoreHistory);
+  const [passedPoints, setPassedPoints] = useState(storedGameState.passedPoints);
   const [showSequenceModal, setShowSequenceModal] = useState(false);
   const [celebration, setCelebration] = useState(null);
 
@@ -412,6 +423,7 @@ function App() {
         activeTeamId,
         showLeaderboard,
         scoreHistory,
+        passedPoints,
       }),
     );
   }, [
@@ -424,6 +436,7 @@ function App() {
     showLeaderboard,
     teams,
     usedIds,
+    passedPoints,
   ]);
 
   useEffect(() => {
@@ -488,6 +501,7 @@ function App() {
     setActiveTeamId(null);
     setShowLeaderboard(false);
     setScoreHistory([]);
+    setPassedPoints(DEFAULT_PASSED_POINTS);
     setShowSequenceModal(false);
     setCelebration(null);
   };
@@ -606,6 +620,18 @@ function App() {
     closeQuestion();
   };
 
+  const markNoTeamAnswered = () => {
+    if (!activeQuestion) {
+      return;
+    }
+
+    setUsedIds((currentIds) =>
+      currentIds.includes(activeQuestion.id) ? currentIds : [...currentIds, activeQuestion.id],
+    );
+    setCurrentTeamIndex((currentIndex) => (teams.length ? (currentIndex + 1) % teams.length : 0));
+    closeQuestion();
+  };
+
   if (!gameStarted) {
     return (
       <main className="app-shell setup-shell">
@@ -614,6 +640,8 @@ function App() {
           onMoveTeam={moveTeam}
           onRemoveTeam={removeTeam}
           onStartGame={startGame}
+          onUpdatePassedPoints={setPassedPoints}
+          passedPoints={passedPoints}
           teams={teams}
         />
       </main>
@@ -631,8 +659,9 @@ function App() {
       )}
       <section className="scoreboard">
         <div>
-          <p className="eyebrow">Matchday trivia board</p>
-          <h1>Football Trivia</h1>
+          <p className="eyebrow">The wizarding world awaits</p>
+          <h1>Harry Potter Trivia</h1>
+          <PartnerMark />
         </div>
         <div className="turn-card">
           <span>Now playing</span>
@@ -667,7 +696,7 @@ function App() {
         </button>
       </section>
 
-      <section className="pitch-board" aria-label="Football trivia categories">
+      <section className="pitch-board" aria-label="Harry Potter trivia categories">
         {QUESTION_DATA.map((category) => (
           <CategoryColumn
             category={category}
@@ -683,10 +712,12 @@ function App() {
           answerVisible={answerVisible}
           activeTeamId={activeTeam?.id ?? ''}
           onClose={closeQuestion}
+          onNoTeamAnswered={markNoTeamAnswered}
           onScore={applyScore}
           onReveal={revealAnswer}
           onSelectTeam={updateActiveTeam}
           question={activeQuestion}
+          passedPoints={passedPoints}
           teams={teams}
         />
       )}
@@ -720,7 +751,7 @@ function App() {
   );
 }
 
-function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, teams }) {
+function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, onUpdatePassedPoints, passedPoints, teams }) {
   const [teamName, setTeamName] = useState('');
 
   const submitTeam = (event) => {
@@ -731,8 +762,33 @@ function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, tea
 
   return (
     <section className="setup-panel">
-      <p className="eyebrow">Tournament setup</p>
-      <h1>Football Trivia</h1>
+      <p className="eyebrow">Gather your houses</p>
+      <h1>Harry Potter Trivia</h1>
+      <PartnerMark />
+      <section className="passed-points-setup" aria-labelledby="passed-points-title">
+        <div>
+          <p className="eyebrow">Passed questions</p>
+          <h2 id="passed-points-title">Set passed-question points</h2>
+        </div>
+        <p>Choose the points a team earns after correctly answering a passed question.</p>
+        <div className="passed-points-inputs">
+          {Object.keys(DEFAULT_PASSED_POINTS).map((difficulty) => (
+            <label key={difficulty}>
+              <span>{difficulty}</span>
+              <input
+                aria-label={`${difficulty} passed-question points`}
+                min="0"
+                onChange={(event) => onUpdatePassedPoints((current) => ({
+                  ...current,
+                  [difficulty]: Math.max(0, Number(event.target.value) || 0),
+                }))}
+                type="number"
+                value={passedPoints[difficulty]}
+              />
+            </label>
+          ))}
+        </div>
+      </section>
       <form className="team-form" onSubmit={submitTeam}>
         <input
           aria-label="Team name"
@@ -772,7 +828,7 @@ function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, tea
       </div>
 
       <button className="start-game-button" disabled={!teams.length} onClick={onStartGame} type="button">
-        Start game
+        Begin the quiz
       </button>
     </section>
   );
@@ -819,9 +875,11 @@ function QuestionModal({
   activeTeamId,
   answerVisible,
   onClose,
+  onNoTeamAnswered,
   onReveal,
   onScore,
   onSelectTeam,
+  passedPoints,
   question,
   teams,
 }) {
@@ -829,6 +887,7 @@ function QuestionModal({
   const defaultPassedTeamId =
     teams.find((team) => team.id !== activeTeamId)?.id ?? activeTeamId ?? teams[0]?.id ?? '';
   const [passedTeamId, setPassedTeamId] = useState(defaultPassedTeamId);
+  const passedQuestionPoints = passedPoints[question.difficulty] ?? 0;
   const isImage = isImagePrompt(question.question);
 
   useEffect(() => {
@@ -939,12 +998,15 @@ function QuestionModal({
                 <button
                   className="secondary-action"
                   disabled={!passedTeamId}
-                  onClick={() => onScore(passedTeamId, customPoints, customPoints > 0)}
+                  onClick={() => onScore(passedTeamId, passedQuestionPoints, passedQuestionPoints > 0)}
                   type="button"
                 >
-                  Give custom to passed team
+                  Give +{passedQuestionPoints} to passed team
                 </button>
               </div>
+              <button className="no-answer-action" onClick={onNoTeamAnswered} type="button">
+                No team answered
+              </button>
             </div>
           )}
           <button className="secondary-action" onClick={onClose} type="button">
@@ -1081,11 +1143,20 @@ function Celebration({ teamName, points, tone }) {
           <span key={index} style={{ '--i': index }} />
         ))}
       </div>
-      <strong>{isMiss ? 'MISS!' : 'GOAL!'}</strong>
+      <strong>{isMiss ? 'MISCHIEF!' : 'MAGIC!'}</strong>
       <p>
         {teamName} {points > 0 ? '+' : ''}
         {points}
       </p>
+    </div>
+  );
+}
+
+function PartnerMark() {
+  return (
+    <div className="partner-mark">
+      <span>Gifting partner</span>
+      <img alt="Nasher Miles" src="/images/nasher-miles.png" />
     </div>
   );
 }
