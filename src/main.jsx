@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { HARRY_POTTER_QUESTION_DATA } from './questions';
+import { HARRY_POTTER_BOOK_QUESTION_DATA } from './harryPotterBookQuestions';
 
 const POINT_TIERS = {
   Hard: { reward: 20, penalty: 15, label: '+20 / -15', tone: 'hard' },
@@ -285,7 +286,7 @@ const LEGACY_QUESTION_DATA = [
   })),
 }));
 
-const QUESTION_DATA = HARRY_POTTER_QUESTION_DATA;
+const QUESTION_DATA = HARRY_POTTER_BOOK_QUESTION_DATA;
 
 const imagePromptPattern = /^(https?:\/\/|\/images\/)/i;
 const STORAGE_KEY = 'harry-potter-trivia-game-state';
