@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { HARRY_POTTER_QUESTION_DATA } from './questions';
 import { HARRY_POTTER_BOOK_QUESTION_DATA } from './harryPotterBookQuestions';
+import { MODERN_FAMILY_QUESTION_DATA } from './modernFamilyQuestions';
 
 const POINT_TIERS = {
   Hard: { reward: 20, penalty: 15, label: '+20 / -15', tone: 'hard' },
@@ -286,10 +286,11 @@ const LEGACY_QUESTION_DATA = [
   })),
 }));
 
-const QUESTION_DATA = HARRY_POTTER_BOOK_QUESTION_DATA;
+// const QUESTION_DATA = HARRY_POTTER_BOOK_QUESTION_DATA;
+const QUESTION_DATA = MODERN_FAMILY_QUESTION_DATA;
 
 const imagePromptPattern = /^(https?:\/\/|\/images\/)/i;
-const STORAGE_KEY = 'harry-potter-trivia-game-state';
+const STORAGE_KEY = 'modern-family-trivia-game-state';
 const DEFAULT_TEAM_NAME = 'Team';
 const DEFAULT_PASSED_POINTS = { Easy: 2, Medium: 5, Hard: 10 };
 const DEFAULT_GAME_STATE = {
@@ -660,9 +661,8 @@ function App() {
       )}
       <section className="scoreboard">
         <div>
-          <p className="eyebrow">The wizarding world awaits</p>
-          <h1>Harry Potter Trivia</h1>
-          <PartnerMark />
+          <p className="eyebrow">Family game night</p>
+          <h1>Modern Family Trivia</h1>
         </div>
         <div className="turn-card">
           <span>Now playing</span>
@@ -697,7 +697,7 @@ function App() {
         </button>
       </section>
 
-      <section className="pitch-board" aria-label="Harry Potter trivia categories">
+      <section className="pitch-board" aria-label="Modern Family trivia categories">
         {QUESTION_DATA.map((category) => (
           <CategoryColumn
             category={category}
@@ -763,9 +763,8 @@ function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, onU
 
   return (
     <section className="setup-panel">
-      <p className="eyebrow">Gather your houses</p>
-      <h1>Harry Potter Trivia</h1>
-      <PartnerMark />
+      <p className="eyebrow">Gather the clan</p>
+      <h1>Modern Family Trivia</h1>
       <section className="passed-points-setup" aria-labelledby="passed-points-title">
         <div>
           <p className="eyebrow">Passed questions</p>
@@ -1144,20 +1143,11 @@ function Celebration({ teamName, points, tone }) {
           <span key={index} style={{ '--i': index }} />
         ))}
       </div>
-      <strong>{isMiss ? 'MISCHIEF!' : 'MAGIC!'}</strong>
+      <strong>{isMiss ? 'AWKWARD!' : 'NAILED IT!'}</strong>
       <p>
         {teamName} {points > 0 ? '+' : ''}
         {points}
       </p>
-    </div>
-  );
-}
-
-function PartnerMark() {
-  return (
-    <div className="partner-mark">
-      <span>Gifting partner</span>
-      <img alt="Nasher Miles" src="/images/nasher-miles.png" />
     </div>
   );
 }

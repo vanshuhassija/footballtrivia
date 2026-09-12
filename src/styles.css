@@ -1206,3 +1206,305 @@ h1 {
 @media (max-width: 680px) {
   .passed-points-inputs { grid-template-columns: 1fr; }
 }
+
+/* Modern Family theme */
+:root {
+  color: #243041;
+  background: #dcecf6;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.app-shell {
+  background: #dcecf6;
+}
+
+.app-shell::before {
+  animation: none;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, .58) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, .48) 1px, transparent 1px),
+    linear-gradient(180deg, #8fc9ed 0%, #d9eef9 42%, #f8f0dc 42%, #efe0bd 100%);
+  background-size: 74px 74px, 74px 74px, auto;
+}
+
+.app-shell::after {
+  animation: none;
+  background:
+    linear-gradient(90deg, transparent 0 10%, rgba(255, 255, 255, .92) 10% 13%, transparent 13% 29%, rgba(255, 255, 255, .92) 29% 32%, transparent 32% 48%, rgba(255, 255, 255, .92) 48% 51%, transparent 51% 67%, rgba(255, 255, 255, .92) 67% 70%, transparent 70%),
+    linear-gradient(#ffffff, #f6f1e6);
+  border: 3px solid rgba(36, 48, 65, .12);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(68, 98, 112, .18);
+  height: min(30vw, 240px);
+  opacity: .72;
+  top: auto;
+  bottom: 3vh;
+  width: min(82vw, 760px);
+}
+
+h1,
+.progress-number,
+.point-button strong,
+.leaderboard-modal h2,
+.sequence-modal h2,
+.leaderboard-row > span:last-child,
+.celebration strong {
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+h1 {
+  color: #21354f;
+  font-size: clamp(2.6rem, 6.6vw, 6.25rem);
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: .94;
+  text-shadow: 0 4px 0 rgba(255, 255, 255, .92), 0 18px 38px rgba(54, 75, 90, .18);
+}
+
+.eyebrow,
+.column-kicker {
+  color: #d45d45;
+  letter-spacing: .08em;
+}
+
+.progress-card,
+.turn-card,
+.setup-panel,
+.category-column {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(253, 248, 236, .94));
+  border-color: rgba(33, 53, 79, .14);
+  box-shadow: 0 18px 42px rgba(55, 79, 96, .16);
+}
+
+.setup-panel {
+  position: relative;
+}
+
+.setup-panel::before,
+.scoreboard > div:first-child::before {
+  background: #ffffff;
+  border: 3px solid rgba(33, 53, 79, .16);
+  border-radius: 8px;
+  box-shadow: 0 12px 25px rgba(60, 82, 98, .14);
+  content: '';
+  display: block;
+  height: 16px;
+  margin-bottom: 18px;
+  width: min(100%, 340px);
+}
+
+.scoreboard > div:first-child::before {
+  background:
+    linear-gradient(90deg, #f4cf4f 0 24%, #ffffff 24% 28%, #5aa2d0 28% 55%, #ffffff 55% 59%, #85b96b 59% 79%, #ffffff 79% 83%, #d45d45 83%);
+}
+
+.setup-panel::before {
+  background:
+    linear-gradient(90deg, #5aa2d0 0 30%, #ffffff 30% 35%, #f4cf4f 35% 63%, #ffffff 63% 68%, #85b96b 68%);
+}
+
+.passed-points-setup {
+  background: #f7fbfd;
+  border-color: rgba(33, 53, 79, .14);
+}
+
+.passed-points-setup h2 {
+  color: #21354f;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.passed-points-setup > p,
+.empty-teams,
+.progress-copy,
+.turn-card span,
+.modal-team-select span,
+.pass-score span,
+.available,
+.difficulty,
+.answer-panel span {
+  color: #5b6e78;
+}
+
+.passed-points-inputs span {
+  color: #d45d45;
+  letter-spacing: .08em;
+}
+
+.passed-points-inputs input,
+.turn-card select,
+.modal-team-select select,
+.team-form input,
+.custom-score input,
+.pass-score select {
+  background: #ffffff;
+  border-color: rgba(33, 53, 79, .18);
+  color: #21354f;
+}
+
+.turn-card strong,
+h2,
+.team-order-item strong,
+.sequence-row strong,
+.leaderboard-row strong,
+.text-question p {
+  color: #21354f;
+}
+
+.progress-track {
+  background: #d8e7e9;
+}
+
+.progress-track span {
+  background: linear-gradient(90deg, #5aa2d0, #85b96b, #f4cf4f);
+}
+
+.reset-button,
+.sequence-button {
+  background: #21354f;
+  color: #ffffff;
+}
+
+.leaderboard-button,
+.sequence-quicklinks button {
+  background: #f4cf4f;
+  color: #21354f;
+}
+
+.start-game-button,
+.correct-action {
+  background: #3f8f6d;
+}
+
+.wrong-action {
+  background: #d45d45;
+}
+
+.no-answer-action {
+  background: #6f7d86;
+}
+
+.primary-action {
+  background: var(--accent, #3f8f6d);
+}
+
+.secondary-action,
+.team-order-item button,
+.sequence-row button {
+  background: #ffffff;
+  border-color: rgba(33, 53, 79, .18);
+  color: #21354f;
+}
+
+.category-column {
+  overflow: hidden;
+}
+
+.category-column::before {
+  background: var(--accent);
+  box-shadow: none;
+  height: 10px;
+}
+
+.category-column header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .7), rgba(244, 207, 79, .08));
+}
+
+.point-button {
+  background: #ffffff;
+  border-color: rgba(33, 53, 79, .13);
+  border-left-color: var(--accent);
+  box-shadow: 0 5px 0 rgba(33, 53, 79, .08);
+  color: #21354f;
+}
+
+.point-button.hard {
+  background: #fff4ef;
+}
+
+.point-button.mid {
+  background: #eef8fd;
+}
+
+.point-button.easy {
+  background: #f2faef;
+}
+
+.point-button:hover:not(:disabled),
+.point-button:focus-visible:not(:disabled) {
+  box-shadow: 0 18px 28px rgba(55, 79, 96, .2);
+  outline: 3px solid rgba(90, 162, 208, .28);
+}
+
+.modal-backdrop,
+.leaderboard-backdrop,
+.sequence-backdrop {
+  background: rgba(33, 53, 79, .48);
+  backdrop-filter: blur(4px);
+}
+
+.question-card,
+.leaderboard-modal,
+.sequence-modal {
+  background:
+    linear-gradient(90deg, rgba(90, 162, 208, .09) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(90, 162, 208, .08) 1px, transparent 1px),
+    linear-gradient(180deg, #ffffff, #fbf3df);
+  background-size: 42px 42px, 42px 42px, auto;
+  border-color: #ffffff;
+  box-shadow: 0 30px 90px rgba(33, 53, 79, .34), inset 0 0 0 3px rgba(33, 53, 79, .1);
+}
+
+.question-topline span {
+  background: #21354f;
+}
+
+.answer-panel {
+  background: #f7fbfd;
+  border-color: rgba(33, 53, 79, .18);
+}
+
+.answer-panel.visible {
+  background: #eff8e8;
+  border-color: #85b96b;
+}
+
+.text-question p {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: clamp(1.8rem, 3.5vw, 3.75rem);
+  line-height: 1.12;
+}
+
+.sequence-row.current {
+  background: #eef8fd;
+  border-color: #5aa2d0;
+}
+
+.rank,
+.team-order-item span {
+  background: #5aa2d0;
+}
+
+.leaderboard-points-history span.positive {
+  background: #eff8e8;
+  color: #3f8f6d;
+}
+
+.leaderboard-points-history span.negative {
+  background: #fff1ec;
+  color: #d45d45;
+}
+
+.leaderboard-row > span:last-child {
+  color: #d45d45;
+}
+
+.celebration {
+  --celebration-bg: rgba(63, 143, 109, .9);
+  --celebration-spark: #f4cf4f;
+}
+
+.celebration.miss {
+  --celebration-bg: rgba(212, 93, 69, .9);
+  --celebration-spark: #ffffff;
+}
