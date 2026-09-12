@@ -661,7 +661,6 @@ function App() {
       )}
       <section className="scoreboard">
         <div>
-          <p className="eyebrow">Family game night</p>
           <h1>Modern Family Trivia</h1>
         </div>
         <div className="turn-card">
