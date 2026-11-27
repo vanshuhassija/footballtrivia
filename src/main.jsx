@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { HARRY_POTTER_BOOK_QUESTION_DATA } from './harryPotterBookQuestions';
-import { MODERN_FAMILY_QUESTION_DATA } from './modernFamilyQuestions';
+import { B99_QUESTION_DATA } from './b99Questions';
 
 const POINT_TIERS = {
   Hard: { reward: 20, penalty: 15, label: '+20 / -15', tone: 'hard' },
@@ -286,11 +285,11 @@ const LEGACY_QUESTION_DATA = [
   })),
 }));
 
-// const QUESTION_DATA = HARRY_POTTER_BOOK_QUESTION_DATA;
-const QUESTION_DATA = MODERN_FAMILY_QUESTION_DATA;
+// Keep the new branch's question bank separate from earlier trivia editions.
+const QUESTION_DATA = B99_QUESTION_DATA;
 
 const imagePromptPattern = /^(https?:\/\/|\/images\/)/i;
-const STORAGE_KEY = 'modern-family-trivia-game-state';
+const STORAGE_KEY = 'b99-trivia-game-state';
 const DEFAULT_TEAM_NAME = 'Team';
 const DEFAULT_PASSED_POINTS = { Easy: 2, Medium: 5, Hard: 10 };
 const DEFAULT_GAME_STATE = {
@@ -304,6 +303,7 @@ const DEFAULT_GAME_STATE = {
   showLeaderboard: false,
   scoreHistory: [],
   passedPoints: DEFAULT_PASSED_POINTS,
+  vultureSteals: {},
 };
 
 function isImagePrompt(text) {
@@ -338,7 +338,7 @@ function findQuestionById(questionId) {
         ...question,
         category: category.category,
         accent: category.accent,
-        points: POINT_TIERS[question.difficulty],
+        points: question.points ?? POINT_TIERS[question.difficulty],
       };
     }
   }
@@ -378,6 +378,7 @@ function loadStoredGameState() {
         Medium: Number.isFinite(parsedState.passedPoints?.Medium) ? parsedState.passedPoints.Medium : DEFAULT_PASSED_POINTS.Medium,
         Hard: Number.isFinite(parsedState.passedPoints?.Hard) ? parsedState.passedPoints.Hard : DEFAULT_PASSED_POINTS.Hard,
       },
+      vultureSteals: parsedState.vultureSteals && typeof parsedState.vultureSteals === 'object' ? parsedState.vultureSteals : {},
     };
   } catch {
     return DEFAULT_GAME_STATE;
@@ -396,7 +397,11 @@ function App() {
   const [showLeaderboard, setShowLeaderboard] = useState(storedGameState.showLeaderboard);
   const [scoreHistory, setScoreHistory] = useState(storedGameState.scoreHistory);
   const [passedPoints, setPassedPoints] = useState(storedGameState.passedPoints);
+  const [vultureSteals, setVultureSteals] = useState(storedGameState.vultureSteals);
+  const [vultureSeconds, setVultureSeconds] = useState(0);
+  const [vultureWindowOpen, setVultureWindowOpen] = useState(false);
   const [showSequenceModal, setShowSequenceModal] = useState(false);
+  const [showVultureTeamsModal, setShowVultureTeamsModal] = useState(false);
   const [celebration, setCelebration] = useState(null);
 
   const totalQuestions = useMemo(
@@ -426,6 +431,7 @@ function App() {
         showLeaderboard,
         scoreHistory,
         passedPoints,
+        vultureSteals,
       }),
     );
   }, [
@@ -439,7 +445,14 @@ function App() {
     teams,
     usedIds,
     passedPoints,
+    vultureSteals,
   ]);
+
+  useEffect(() => {
+    if (!activeQuestion || !vultureWindowOpen || vultureSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setVultureSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [activeQuestion, vultureSeconds, vultureWindowOpen]);
 
   useEffect(() => {
     if (!celebration) {
@@ -469,26 +482,33 @@ function App() {
       ...nextQuestion,
       category: category.category,
       accent: category.accent,
-      points: POINT_TIERS[difficulty],
+      points: nextQuestion.points ?? POINT_TIERS[difficulty],
     });
     setActiveTeamId(currentTeam?.id ?? teams[0]?.id ?? null);
     setAnswerVisible(false);
+    const vulture = teams.find((team) => team.id === currentTeam?.vultureId);
+    const canSteal = vulture && (vultureSteals[vulture.id] ?? 0) < 2;
+    setVultureSeconds(canSteal ? 15 : 0);
+    setVultureWindowOpen(Boolean(canSteal));
   };
 
   const revealAnswer = () => {
-    if (!activeQuestion) {
-      return;
-    }
+    if (activeQuestion) setAnswerVisible(true);
+  };
 
-    setAnswerVisible(true);
-    setUsedIds((currentIds) =>
-      currentIds.includes(activeQuestion.id) ? currentIds : [...currentIds, activeQuestion.id],
-    );
+  const finishQuestion = () => {
+    if (activeQuestion) {
+      setUsedIds((currentIds) => currentIds.includes(activeQuestion.id) ? currentIds : [...currentIds, activeQuestion.id]);
+    }
+    setCurrentTeamIndex((currentIndex) => (teams.length ? (currentIndex + 1) % teams.length : 0));
+    closeQuestion();
   };
 
   const closeQuestion = () => {
     setActiveQuestion(null);
     setAnswerVisible(false);
+    setVultureWindowOpen(false);
+    setVultureSeconds(0);
     setActiveTeamId(currentTeam?.id ?? null);
   };
 
@@ -504,6 +524,9 @@ function App() {
     setShowLeaderboard(false);
     setScoreHistory([]);
     setPassedPoints(DEFAULT_PASSED_POINTS);
+    setVultureSteals({});
+    setVultureWindowOpen(false);
+    setVultureSeconds(0);
     setShowSequenceModal(false);
     setCelebration(null);
   };
@@ -521,6 +544,7 @@ function App() {
         id: `${Date.now()}-${cleanName}`,
         name: cleanName,
         score: 0,
+        vultureId: null,
       },
     ]);
   };
@@ -582,11 +606,7 @@ function App() {
     setActiveTeamId(teams[0]?.id ?? null);
   };
 
-  const updateActiveTeam = (teamId) => {
-    setActiveTeamId(teamId);
-  };
-
-  const applyScore = (teamId, points, wasCorrect) => {
+  const applyScore = (teamId, points, wasCorrect, closeAfter = true) => {
     const scoringTeam = teams.find((team) => team.id === teamId);
 
     if (!scoringTeam || !activeQuestion) {
@@ -618,20 +638,16 @@ function App() {
       },
     ]);
 
-    setCurrentTeamIndex((currentIndex) => (teams.length ? (currentIndex + 1) % teams.length : 0));
-    closeQuestion();
+    if (closeAfter) {
+      setCurrentTeamIndex((currentIndex) => (teams.length ? (currentIndex + 1) % teams.length : 0));
+      closeQuestion();
+    }
   };
 
-  const markNoTeamAnswered = () => {
-    if (!activeQuestion) {
-      return;
-    }
-
-    setUsedIds((currentIds) =>
-      currentIds.includes(activeQuestion.id) ? currentIds : [...currentIds, activeQuestion.id],
-    );
-    setCurrentTeamIndex((currentIndex) => (teams.length ? (currentIndex + 1) % teams.length : 0));
-    closeQuestion();
+  const markVultureSteal = (teamId) => {
+    setVultureSteals((current) => ({ ...current, [teamId]: (current[teamId] ?? 0) + 1 }));
+    setVultureWindowOpen(false);
+    setVultureSeconds(0);
   };
 
   if (!gameStarted) {
@@ -639,6 +655,7 @@ function App() {
       <main className="app-shell setup-shell">
         <TournamentSetup
           onAddTeam={addTeam}
+          onSetVulture={(teamId, vultureId) => setTeams((current) => current.map((team) => team.id === teamId ? { ...team, vultureId } : team))}
           onMoveTeam={moveTeam}
           onRemoveTeam={removeTeam}
           onStartGame={startGame}
@@ -661,11 +678,12 @@ function App() {
       )}
       <section className="scoreboard">
         <div>
-          <h1>Modern Family Trivia</h1>
+          <h1>Brooklyn Nine-Nine Trivia</h1>
         </div>
         <div className="turn-card">
           <span>Now playing</span>
           <strong>{currentTeam?.name ?? 'No team'}</strong>
+          {currentTeam?.vultureId && <span className="turn-vulture">Vulture: {teams.find((team) => team.id === currentTeam.vultureId)?.name} · {vultureSteals[currentTeam.vultureId] ?? 0}/2 steals</span>}
           <select
             aria-label="Select current team"
             onChange={(event) => setCurrentTeamIndex(Number(event.target.value))}
@@ -680,12 +698,15 @@ function App() {
           <button className="sequence-button" onClick={() => setShowSequenceModal(true)} type="button">
             Adjust sequence
           </button>
+          <button className="sequence-button" onClick={() => setShowVultureTeamsModal(true)} type="button">
+            Edit Vulture teams
+          </button>
         </div>
         <div className="progress-card" aria-label={`${completedCount} of ${totalQuestions} questions played`}>
           <span className="progress-number">{completedCount}</span>
           <span className="progress-copy">played of {totalQuestions}</span>
           <div className="progress-track">
-            <span style={{ width: `${(completedCount / totalQuestions) * 100}%` }} />
+            <span style={{ width: `${totalQuestions ? (completedCount / totalQuestions) * 100 : 0}%` }} />
           </div>
         </div>
         <button className="leaderboard-button" onClick={() => setShowLeaderboard(true)} type="button">
@@ -696,15 +717,15 @@ function App() {
         </button>
       </section>
 
-      <section className="pitch-board" aria-label="Modern Family trivia categories">
-        {QUESTION_DATA.map((category) => (
+      <section className="pitch-board" aria-label="Brooklyn Nine-Nine trivia categories">
+        {QUESTION_DATA.length ? QUESTION_DATA.map((category) => (
           <CategoryColumn
             category={category}
             key={category.category}
             onPick={pickQuestion}
             usedIds={usedIds}
           />
-        ))}
+        )) : <p className="empty-question-bank">B99 categories and questions will appear here when added.</p>}
       </section>
 
       {activeQuestion && (
@@ -712,13 +733,16 @@ function App() {
           answerVisible={answerVisible}
           activeTeamId={activeTeam?.id ?? ''}
           onClose={closeQuestion}
-          onNoTeamAnswered={markNoTeamAnswered}
           onScore={applyScore}
+          onMarkVultureSteal={markVultureSteal}
+          onFinish={finishQuestion}
           onReveal={revealAnswer}
-          onSelectTeam={updateActiveTeam}
           question={activeQuestion}
           passedPoints={passedPoints}
           teams={teams}
+          vultureSeconds={vultureSeconds}
+          vultureWindowOpen={vultureWindowOpen}
+          vultureSteals={vultureSteals}
         />
       )}
 
@@ -747,11 +771,20 @@ function App() {
           teams={teams}
         />
       )}
+
+      {showVultureTeamsModal && (
+        <VultureTeamsModal
+          onClose={() => setShowVultureTeamsModal(false)}
+          onSetVulture={(teamId, vultureId) => setTeams((current) => current.map((team) => team.id === teamId ? { ...team, vultureId } : team))}
+          teams={teams}
+          vultureSteals={vultureSteals}
+        />
+      )}
     </main>
   );
 }
 
-function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, onUpdatePassedPoints, passedPoints, teams }) {
+function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onSetVulture, onStartGame, onUpdatePassedPoints, passedPoints, teams }) {
   const [teamName, setTeamName] = useState('');
 
   const submitTeam = (event) => {
@@ -762,8 +795,9 @@ function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, onU
 
   return (
     <section className="setup-panel">
-      <p className="eyebrow">Gather the clan</p>
-      <h1>Modern Family Trivia</h1>
+      <p className="eyebrow">Nine-Nine!</p>
+      <h1>Brooklyn Nine-Nine Trivia</h1>
+      <p>Set up each squad and the opposing Vulture team that can steal its questions.</p>
       <section className="passed-points-setup" aria-labelledby="passed-points-title">
         <div>
           <p className="eyebrow">Passed questions</p>
@@ -806,6 +840,7 @@ function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, onU
             <article className="team-order-item" key={team.id}>
               <span>{index + 1}</span>
               <strong>{team.name}</strong>
+              <label className="vulture-setup-select"><span>Vulture team</span><select aria-label={`Vulture team for ${team.name}`} value={team.vultureId ?? ''} onChange={(event) => onSetVulture(team.id, event.target.value || null)}><option value="">Choose team</option>{teams.filter((option) => option.id !== team.id).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
               <button onClick={() => onMoveTeam(team.id, -1)} type="button" disabled={index === 0}>
                 Up
               </button>
@@ -826,8 +861,8 @@ function TournamentSetup({ onAddTeam, onMoveTeam, onRemoveTeam, onStartGame, onU
         )}
       </div>
 
-      <button className="start-game-button" disabled={!teams.length} onClick={onStartGame} type="button">
-        Begin the quiz
+      <button className="start-game-button" disabled={teams.length < 2 || teams.some((team) => !team.vultureId)} onClick={onStartGame} type="button">
+        {teams.length < 2 ? 'Add at least two teams' : teams.some((team) => !team.vultureId) ? 'Assign every Vulture team' : 'Begin the quiz'}
       </button>
     </section>
   );
@@ -874,36 +909,38 @@ function QuestionModal({
   activeTeamId,
   answerVisible,
   onClose,
-  onNoTeamAnswered,
   onReveal,
   onScore,
-  onSelectTeam,
+  onMarkVultureSteal,
+  onFinish,
   passedPoints,
   question,
   teams,
+  vultureSeconds,
+  vultureWindowOpen,
+  vultureSteals,
 }) {
+  const [answerMode, setAnswerMode] = useState('choose');
   const [customPoints, setCustomPoints] = useState(question.points.reward);
-  const defaultPassedTeamId =
-    teams.find((team) => team.id !== activeTeamId)?.id ?? activeTeamId ?? teams[0]?.id ?? '';
-  const [passedTeamId, setPassedTeamId] = useState(defaultPassedTeamId);
+  const [passedTeamId, setPassedTeamId] = useState('');
+  const ogTeam = teams.find((team) => team.id === activeTeamId);
+  const vultureTeam = teams.find((team) => team.id === ogTeam?.vultureId);
+  const canVultureSteal = Boolean(vultureTeam && (vultureSteals[vultureTeam.id] ?? 0) < 2 && vultureWindowOpen);
+  const defaultPassedTeamId = teams.find((team) => team.id !== activeTeamId)?.id ?? '';
   const passedQuestionPoints = passedPoints[question.difficulty] ?? 0;
   const isImage = isImagePrompt(question.question);
 
   useEffect(() => {
+    setAnswerMode('choose');
     setCustomPoints(question.points.reward);
   }, [question.id, question.points.reward]);
 
   useEffect(() => {
-    setPassedTeamId((currentTeamId) => {
-      const currentTeamStillExists = teams.some((team) => team.id === currentTeamId);
-
-      if (currentTeamStillExists && currentTeamId !== activeTeamId) {
-        return currentTeamId;
-      }
-
-      return defaultPassedTeamId;
-    });
+    setPassedTeamId((currentTeamId) => teams.some((team) => team.id === currentTeamId && team.id !== activeTeamId) ? currentTeamId : defaultPassedTeamId);
   }, [activeTeamId, defaultPassedTeamId, teams]);
+
+  const recordAttempt = (teamId, points, wasCorrect) => onScore(teamId, points, wasCorrect, false);
+  const finishAttempts = onFinish;
 
   return (
     <section className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Trivia question">
@@ -914,103 +951,68 @@ function QuestionModal({
           <span>{question.points.label}</span>
         </div>
 
-        <label className="modal-team-select">
-          <span>Playing team</span>
-          <select onChange={(event) => onSelectTeam(event.target.value)} value={activeTeamId}>
-            {teams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name} ({team.score})
-              </option>
-            ))}
-          </select>
-        </label>
+        {vultureWindowOpen && vultureSeconds > 0 && vultureTeam && <div className={`vulture-timer ${vultureSeconds <= 5 ? 'urgent' : ''}`}><span>Vulture window</span><strong>{vultureSeconds}s</strong><small>{vultureTeam.name} · {(vultureSteals[vultureTeam.id] ?? 0)}/2 steals used</small></div>}
+
+        <div className="modal-team-select"><span>Original team</span><strong>{ogTeam?.name ?? 'No team'}</strong></div>
 
         <div className="question-body">
-          {isImage ? (
-            <ImageClue question={question} />
-          ) : (
-            <div className="text-question">
-              <p>{question.question}</p>
-            </div>
-          )}
+          {isImage ? <ImageClue question={question} /> : <div className="text-question"><p>{question.question}</p></div>}
         </div>
 
         <div className={`answer-panel ${answerVisible ? 'visible' : ''}`}>
           <span>Answer</span>
-          <strong>{answerVisible ? question.answer : 'Hidden until reveal'}</strong>
+          <strong>{answerVisible ? question.answer : 'Hidden until you reveal it'}</strong>
         </div>
 
         <div className="question-actions">
-          {!answerVisible ? (
-            <button className="primary-action" onClick={onReveal} type="button">
-              Reveal answer
-            </button>
-          ) : (
-            <div className="score-decision">
-              <p>Was the answer correct?</p>
+          {answerVisible ? <div className="score-decision">
+            {answerMode === 'choose' && <>
+              {canVultureSteal && <>
+                <div className="score-buttons">
+                  <button className="correct-action" onClick={() => setAnswerMode('og-result')} type="button">OG team answered</button>
+                  <button className="wrong-action" onClick={() => { onMarkVultureSteal(vultureTeam.id); setAnswerMode('vulture-result'); }} type="button">Vulture snatched</button>
+                </div>
+                <p className="decision-hint">Record a snatch only if it happened during the 15-second window.</p>
+                <div className="pass-score">
+                  <label><span>Pass question to</span><select aria-label="Passed to team" onChange={(event) => setPassedTeamId(event.target.value)} value={passedTeamId}>{teams.filter((team) => team.id !== activeTeamId).map((team) => <option key={team.id} value={team.id}>{team.name} ({team.score})</option>)}</select></label>
+                  <div className="pass-score-action"><strong>+{passedQuestionPoints} points</strong><button className="secondary-action" disabled={!passedTeamId} onClick={() => { recordAttempt(passedTeamId, passedQuestionPoints, passedQuestionPoints > 0); finishAttempts(); }} type="button">Pass question</button></div>
+                </div>
+                <button className="no-answer-action" onClick={finishAttempts} type="button">No team answered</button>
+              </>}
+            </>}
+            {answerMode === 'vulture-result' && <>
+              <p>Did {vultureTeam?.name} answer correctly?</p>
               <div className="score-buttons">
-                <button
-                  className="correct-action"
-                  onClick={() => onScore(activeTeamId, question.points.reward, true)}
-                  type="button"
-                >
-                  Yes +{question.points.reward}
-                </button>
-                <button
-                  className="wrong-action"
-                  onClick={() => onScore(activeTeamId, -question.points.penalty, false)}
-                  type="button"
-                >
-                  No -{question.points.penalty}
-                </button>
+                <button className="correct-action" onClick={() => { recordAttempt(vultureTeam.id, question.points.reward, true); onFinish(); }} type="button">Yes +{question.points.reward}</button>
+                <button className="wrong-action" onClick={() => { recordAttempt(vultureTeam.id, -question.points.penalty, false); setAnswerMode('og-after-vulture'); }} type="button">No -{question.points.penalty}</button>
+              </div>
+            </>}
+            {answerMode === 'og-after-vulture' && <>
+              <p>Did {ogTeam?.name} answer correctly? OG may also decline; no passing after a Vulture steal.</p>
+              <div className="score-buttons">
+                <button className="correct-action" onClick={() => { recordAttempt(ogTeam.id, question.points.reward, true); finishAttempts(); }} type="button">Yes +{question.points.reward}</button>
+                <button className="wrong-action" onClick={() => { recordAttempt(ogTeam.id, -question.points.penalty, false); finishAttempts(); }} type="button">No -{question.points.penalty}</button>
+              </div>
+              <button className="secondary-action" onClick={finishAttempts} type="button">OG declines (no points)</button>
+            </>}
+            {(answerMode === 'og-result' || (!canVultureSteal && answerMode === 'choose')) && <>
+              <p>Did {ogTeam?.name} answer correctly?</p>
+              <div className="score-buttons">
+                <button className="correct-action" onClick={() => { recordAttempt(ogTeam.id, question.points.reward, true); finishAttempts(); }} type="button">Yes +{question.points.reward}</button>
+                <button className="wrong-action" onClick={() => { recordAttempt(ogTeam.id, -question.points.penalty, false); finishAttempts(); }} type="button">No -{question.points.penalty}</button>
               </div>
               <div className="custom-score">
-                <input
-                  aria-label="Custom points"
-                  onChange={(event) => setCustomPoints(Number(event.target.value))}
-                  type="number"
-                  value={customPoints}
-                />
-                <button
-                  className="secondary-action"
-                  onClick={() => onScore(activeTeamId, customPoints, customPoints > 0)}
-                  type="button"
-                >
-                  Apply custom
-                </button>
+                <input aria-label="Custom points" onChange={(event) => setCustomPoints(Number(event.target.value))} type="number" value={customPoints} />
+                <button className="secondary-action" onClick={() => { recordAttempt(ogTeam.id, customPoints, customPoints > 0); finishAttempts(); }} type="button">Apply custom</button>
               </div>
-              <div className="pass-score">
-                <label>
-                  <span>Passed to team</span>
-                  <select
-                    aria-label="Passed to team"
-                    onChange={(event) => setPassedTeamId(event.target.value)}
-                    value={passedTeamId}
-                  >
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name} ({team.score})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="secondary-action"
-                  disabled={!passedTeamId}
-                  onClick={() => onScore(passedTeamId, passedQuestionPoints, passedQuestionPoints > 0)}
-                  type="button"
-                >
-                  Give +{passedQuestionPoints} to passed team
-                </button>
-              </div>
-              <button className="no-answer-action" onClick={onNoTeamAnswered} type="button">
-                No team answered
-              </button>
-            </div>
-          )}
-          <button className="secondary-action" onClick={onClose} type="button">
-            Close
-          </button>
+              {!canVultureSteal && <div className="pass-score">
+                <label><span>Pass question to</span><select aria-label="Passed to team" onChange={(event) => setPassedTeamId(event.target.value)} value={passedTeamId}>{teams.filter((team) => team.id !== activeTeamId).map((team) => <option key={team.id} value={team.id}>{team.name} ({team.score})</option>)}</select></label>
+                <div className="pass-score-action"><strong>+{passedQuestionPoints} points</strong><button className="secondary-action" disabled={!passedTeamId} onClick={() => { recordAttempt(passedTeamId, passedQuestionPoints, passedQuestionPoints > 0); finishAttempts(); }} type="button">Pass question</button></div>
+              </div>}
+              {!canVultureSteal && <button className="no-answer-action" onClick={finishAttempts} type="button">No team answered</button>}
+            </>}
+          </div> : <button className="primary-action" onClick={onReveal} type="button">Reveal answer</button>}
+          <button className="secondary-action" onClick={onClose} type="button">Close</button>
         </div>
       </article>
     </section>
@@ -1132,6 +1134,30 @@ function TeamSequenceModal({
   );
 }
 
+function VultureTeamsModal({ onClose, onSetVulture, teams, vultureSteals }) {
+  return (
+    <section className="modal-backdrop sequence-backdrop" role="dialog" aria-modal="true" aria-label="Edit Vulture teams">
+      <article className="sequence-modal">
+        <p className="eyebrow">Team assignments</p>
+        <h2>Edit Vulture teams</h2>
+        <p>Choose the opposing team that can snatch each team’s question. Each Vulture team’s two-steal limit follows that team.</p>
+        <div className="vulture-edit-list">
+          {teams.map((team) => (
+            <label className="vulture-edit-row" key={team.id}>
+              <span><strong>{team.name}</strong><small>{vultureSteals[team.vultureId] ?? 0}/2 steals used by its Vulture</small></span>
+              <select aria-label={`Vulture team for ${team.name}`} onChange={(event) => onSetVulture(team.id, event.target.value || null)} value={team.vultureId ?? ''}>
+                <option value="">No Vulture team</option>
+                {teams.filter((candidate) => candidate.id !== team.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+        <button className="primary-action" onClick={onClose} type="button">Done</button>
+      </article>
+    </section>
+  );
+}
+
 function Celebration({ teamName, points, tone }) {
   const isMiss = tone === 'miss';
 
@@ -1142,7 +1168,7 @@ function Celebration({ teamName, points, tone }) {
           <span key={index} style={{ '--i': index }} />
         ))}
       </div>
-      <strong>{isMiss ? 'AWKWARD!' : 'NAILED IT!'}</strong>
+      <strong>{isMiss ? 'BONE?!' : 'NOICE!'}</strong>
       <p>
         {teamName} {points > 0 ? '+' : ''}
         {points}
