@@ -1143,7 +1143,7 @@ function Celebration({ teamName, points, tone }) {
           <span key={index} style={{ '--i': index }} />
         ))}
       </div>
-      <strong>{isMiss ? 'AWKWARD!' : 'NAILED IT!'}</strong>
+      <strong>{isMiss ? 'WE WERE ON A BREAK!' : 'HOW YOU DOIN’?'}</strong>
       <p>
         {teamName} {points > 0 ? '+' : ''}
         {points}
