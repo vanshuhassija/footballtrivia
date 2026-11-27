@@ -315,9 +315,9 @@ h1 {
 .pitch-board {
   display: grid;
   gap: clamp(12px, 2vw, 22px);
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0 auto;
-  max-width: 1540px;
+  width: 100%;
 }
 
 .category-column {
